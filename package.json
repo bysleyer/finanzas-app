@@ -1,0 +1,21 @@
+{
+  "name": "finanzas-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App de finanzas personales: cuánto puedo gastar hoy sin comprometer mañana.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "check": "npm run typecheck && npm run lint && npm run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.47.0",
+    "vitest": "^3.2.4"
+  }
+}
