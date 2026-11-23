@@ -80,6 +80,8 @@ export function debtPayments(
   from: LocalDate,
   to: LocalDate,
 ): ProjectedEvent[] {
+  // Deuda sin pagos programados (por ejemplo, un préstamo de un amigo que "puede esperar").
+  if (debt.payment <= 0) return [];
   const events: ProjectedEvent[] = [];
   let balance: number = debt.balance;
   let lastDate = from;

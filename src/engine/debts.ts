@@ -6,7 +6,18 @@
  * día a día (events.ts) usa interés diario para mayor precisión en las fechas reales.
  */
 
-import { type Cents, type Debt, type Id, cents } from '../domain';
+import { type Cents, type Debt, type Id, type RecurrenceRule, cents } from '../domain';
+
+/** Cuántos pagos hay en un año con esta regla (semanal = 52, cada 2 semanas = 26, mensual = 12…). */
+export function paymentsPerYear(rule: RecurrenceRule): number {
+  const perUnit = { day: 365, week: 52, month: 12, year: 1 }[rule.unit];
+  return perUnit / rule.interval;
+}
+
+/** Monto mensual equivalente: $130 cada semana ≈ $563 al mes. */
+export function monthlyEquivalent(amount: Cents, rule: RecurrenceRule): Cents {
+  return cents(Math.round((amount * paymentsPerYear(rule)) / 12));
+}
 
 /** Tope de simulación: 50 años. Si no se liquida antes, se considera "nunca". */
 export const MAX_MONTHS = 600;
@@ -19,8 +30,12 @@ export type PayoffEstimate =
   | { payable: true; months: number; totalInterest: Cents }
   | { payable: false; monthlyInterest: Cents };
 
-/** Cuánto tarda en liquidarse una deuda pagando siempre `payment` (por defecto, el planeado). */
-export function payoffEstimate(debt: Debt, payment: Cents = debt.payment): PayoffEstimate {
+/**
+ * Cuánto tarda en liquidarse una deuda pagando siempre `payment` (por defecto, el planeado),
+ * convertido a su equivalente mensual si se paga cada semana o cada dos semanas.
+ */
+export function payoffEstimate(debt: Debt, paymentPerPeriod: Cents = debt.payment): PayoffEstimate {
+  const payment = monthlyEquivalent(paymentPerPeriod, debt.rule);
   let balance: number = debt.balance;
   let totalInterest = 0;
   const firstInterest = monthlyInterest(balance, debt.aprBasisPoints);
@@ -70,7 +85,7 @@ export function simulateStrategy(debts: readonly Debt[], monthlyBudget: Cents, s
   const balances = new Map<Id, number>(active.map((d) => [d.id, d.balance]));
   const byId = new Map(active.map((d) => [d.id, d]));
   const paidOffMonth = new Map<Id, number>();
-  const minimums = active.reduce((total, d) => total + d.minimumPayment, 0);
+  const minimums = active.reduce((total, d) => total + monthlyEquivalent(d.minimumPayment, d.rule), 0);
   let totalInterest = 0;
   let month = 0;
 
@@ -92,7 +107,9 @@ export function simulateStrategy(debts: readonly Debt[], monthlyBudget: Cents, s
     for (const id of order) {
       const balance = balances.get(id) ?? 0;
       if (balance <= 0) continue;
-      const pay = Math.min(byId.get(id)?.minimumPayment ?? 0, balance, available);
+      const debt = byId.get(id);
+      const minimum = debt ? monthlyEquivalent(debt.minimumPayment, debt.rule) : 0;
+      const pay = Math.min(minimum, balance, available);
       balances.set(id, balance - pay);
       available -= pay;
     }
@@ -124,7 +141,7 @@ export interface StrategyComparison {
 
 /** Compara ambas estrategias con el presupuesto mensual actual (suma de los pagos planeados). */
 export function compareStrategies(debts: readonly Debt[], monthlyBudget?: Cents): StrategyComparison {
-  const budget = monthlyBudget ?? cents(debts.filter((d) => d.balance > 0).reduce((t, d) => t + d.payment, 0));
+  const budget = monthlyBudget ?? cents(debts.filter((d) => d.balance > 0).reduce((t, d) => t + monthlyEquivalent(d.payment, d.rule), 0));
   const avalanche = simulateStrategy(debts, budget, 'avalanche');
   const snowball = simulateStrategy(debts, budget, 'snowball');
   const interestSaved = cents(snowball.totalInterest - avalanche.totalInterest);

@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { MAIN_ACCOUNT_ID, saveSettings, setAccountBalance } from '../../data';
 import { parseMoneyInput, toInputString } from '../../domain';
+import { ImportMiDinero } from '../components/ImportMiDinero';
 import { MoneyField } from '../components/MoneyField';
 import { db } from '../db';
 import { money } from '../format';
@@ -86,6 +87,14 @@ export function Settings({ data }: { data: AppData }) {
           {persisted === false && 'Instala la app en tu pantalla de inicio para que el navegador no los borre.'}
         </p>
         <p className="hint">Pronto: respaldo cifrado en tu repo privado de GitHub y exportar a CSV/JSON.</p>
+      </section>
+
+      <section className="card">
+        <h2>Vienes de Mi dinero</h2>
+        <p className="hint">
+          En Mi dinero toca Respaldo → Descargar respaldo. Luego elige ese archivo aquí: verás qué se importa antes de confirmar.
+        </p>
+        <ImportMiDinero today={data.input.today} onDone={() => (location.hash = '#home')} />
       </section>
     </main>
   );

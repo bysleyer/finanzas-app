@@ -416,6 +416,8 @@ button.small.primary {
   min-height: 36px;
   padding: 6px 16px;
   border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-text);
 }
 
 button.link {
@@ -796,4 +798,24 @@ button.add {
 
 .money-input .suffix {
   padding: 0 14px;
+}
+
+/* ── Importar ──────────────────────────────────────────────────────────── */
+
+.list.compact .row {
+  min-height: 40px;
+  padding: 6px 0;
+}
+
+.warnings {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+button.primary:disabled {
+  opacity: 0.6;
 }

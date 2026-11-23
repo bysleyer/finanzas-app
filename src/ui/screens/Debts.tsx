@@ -5,6 +5,7 @@ import {
   type DebtKind,
   type LocalDate,
   type OccurrenceKey,
+  type RecurrenceRule,
   addMonths,
   cents,
   formatRate,
@@ -16,7 +17,7 @@ import {
   sum,
   toInputString,
 } from '../../domain';
-import { type StrategyResult, compareStrategies, monthlyInterest, nextUnresolved, payoffEstimate } from '../../engine';
+import { type StrategyResult, compareStrategies, monthlyEquivalent, monthlyInterest, nextUnresolved, payoffEstimate } from '../../engine';
 import { MoneyField } from '../components/MoneyField';
 import { Sheet } from '../components/Sheet';
 import { db } from '../db';
@@ -29,6 +30,19 @@ function monthYear(today: LocalDate, monthsAhead: number): string {
   const { year, month } = parts(addMonths(today, monthsAhead));
   return `${MONTHS[month - 1]} ${year}`;
 }
+
+/** "por semana", "cada 2 semanas", "al mes" */
+function per(rule: RecurrenceRule): string {
+  if (rule.unit === 'week') return rule.interval === 1 ? 'por semana' : `cada ${rule.interval} semanas`;
+  if (rule.unit === 'month') return rule.interval === 1 ? 'al mes' : `cada ${rule.interval} meses`;
+  return rule.unit === 'year' ? 'al año' : 'al día';
+}
+
+const DEBT_FREQUENCIES = [
+  { value: 'week-1', label: 'Cada semana', unit: 'week', interval: 1 },
+  { value: 'week-2', label: 'Cada 2 semanas', unit: 'week', interval: 2 },
+  { value: 'month-1', label: 'Cada mes', unit: 'month', interval: 1 },
+] as const;
 
 function duration(months: number): string {
   if (months < 12) return `${months} ${months === 1 ? 'mes' : 'meses'}`;
@@ -53,7 +67,7 @@ export function Debts({ data, today }: { data: AppData; today: LocalDate }) {
           <h2>Debes en total</h2>
           <p className="big-number">{money(total)}</p>
           <p className="hint">
-            Pagas {money(sum(active.map((d) => d.payment)))} al mes entre {active.length}{' '}
+            Pagas {money(sum(active.map((d) => monthlyEquivalent(d.payment, d.rule))))} al mes entre {active.length}{' '}
             {active.length === 1 ? 'deuda' : 'deudas'}.
           </p>
         </section>
@@ -93,11 +107,11 @@ function DebtDetail({ debt, today, resolved }: { debt: Debt; today: LocalDate; r
   return (
     <>
       <span className="row-sub">
-        {formatRate(debt.aprBasisPoints)}% anual · {money(debt.payment)}
-        {next ? ` · próximo pago ${relativeDate(next, today).toLowerCase()}` : ''}
+        {formatRate(debt.aprBasisPoints)}% anual · {debt.payment > 0 ? `${money(debt.payment)} ${per(debt.rule)}` : 'sin pagos programados'}
+        {next && debt.payment > 0 ? ` · próximo pago ${relativeDate(next, today).toLowerCase()}` : ''}
         {debt.statementDay ? ` · corte día ${debt.statementDay}` : ''}
       </span>
-      {debt.balance > 0 &&
+      {debt.balance > 0 && debt.payment > 0 &&
         (estimate.payable ? (
           <span className="row-sub">
             Libre en {monthYear(today, estimate.months)} ({duration(estimate.months)})
@@ -143,7 +157,7 @@ function StrategyCard({ debts, today }: { debts: Debt[]; today: LocalDate }) {
     <section className="card stack">
       <h2>Plan para salir de deudas</h2>
       <p className="hint">
-        Con los mismos {money(sum(debts.map((d) => d.payment)))} al mes: pagas el mínimo en todas y el resto va a una sola. Cuando
+        Con los mismos {money(sum(debts.map((d) => monthlyEquivalent(d.payment, d.rule))))} al mes: pagas el mínimo en todas y el resto va a una sola. Cuando
         terminas una, su pago pasa a la siguiente.
       </p>
       {row(c.avalanche, 'Avalancha', 'Primero la de mayor tasa. Pagas menos intereses.')}
@@ -166,18 +180,23 @@ function DebtForm({ today, initial, onClose }: { today: LocalDate; initial: Debt
   const [rate, setRate] = useState(initial ? formatRate(initial.aprBasisPoints) : '');
   const [minimum, setMinimum] = useState(initial ? toInputString(initial.minimumPayment) : '');
   const [payment, setPayment] = useState(initial ? toInputString(initial.payment) : '');
+  const [freq, setFreq] = useState<string>(
+    (initial && DEBT_FREQUENCIES.find((f) => f.unit === initial.rule.unit && f.interval === initial.rule.interval)?.value) ?? 'month-1',
+  );
+  const frequency = DEBT_FREQUENCIES.find((f) => f.value === freq) ?? DEBT_FREQUENCIES[2];
+  const formRule = (anchor: LocalDate): RecurrenceRule => ({ unit: frequency.unit, interval: frequency.interval, anchor });
   const [next, setNext] = useState<string>((initial && nextOccurrence(initial.rule, today)) ?? today);
   const [statementDay, setStatementDay] = useState(initial?.statementDay ? String(initial.statementDay) : '');
   const [error, setError] = useState('');
 
   const b = parseMoneyInput(balance, { allowZero: true });
   const apr = parseRateInput(rate);
-  const min = parseMoneyInput(minimum);
-  const pay = payment.trim() === '' ? min : parseMoneyInput(payment);
+  const min = parseMoneyInput(minimum, { allowZero: true });
+  const pay = payment.trim() === '' ? min : parseMoneyInput(payment, { allowZero: true });
   const interest = b !== undefined && apr !== undefined ? monthlyInterest(b, apr) : undefined;
   const preview =
-    b !== undefined && apr !== undefined && min !== undefined && pay !== undefined && b > 0
-      ? payoffEstimate({ id: 'preview', name, kind, balance: b, aprBasisPoints: apr, minimumPayment: min, payment: pay, rule: { unit: 'month', interval: 1, anchor: today } })
+    b !== undefined && apr !== undefined && min !== undefined && pay !== undefined && b > 0 && pay > 0
+      ? payoffEstimate({ id: 'preview', name, kind, balance: b, aprBasisPoints: apr, minimumPayment: min, payment: pay, rule: formRule(today) })
       : undefined;
 
   async function submit(e: FormEvent) {
@@ -186,7 +205,7 @@ function DebtForm({ today, initial, onClose }: { today: LocalDate; initial: Debt
     if (!name.trim()) return setError('Ponle un nombre, por ejemplo "Visa Chase".');
     if (b === undefined) return setError('Escribe cuánto debes hoy.');
     if (apr === undefined) return setError('Escribe la tasa anual (APR), por ejemplo 24.99.');
-    if (min === undefined) return setError('Escribe el pago mínimo.');
+    if (min === undefined) return setError('Escribe el pago mínimo (0 si no hay).');
     if (pay === undefined) return setError('El pago mensual no es un monto válido.');
     if (pay < min) return setError('El pago mensual no puede ser menor que el mínimo.');
     if (!next) return setError('Elige la fecha del próximo pago.');
@@ -199,7 +218,7 @@ function DebtForm({ today, initial, onClose }: { today: LocalDate; initial: Debt
       aprBasisPoints: apr,
       minimumPayment: min,
       payment: pay,
-      rule: { unit: 'month', interval: 1, anchor: localDate(next) },
+      rule: formRule(localDate(next)),
       ...(kind === 'credit-card' && day !== undefined ? { statementDay: day } : {}),
     });
     onClose();
@@ -238,11 +257,19 @@ function DebtForm({ today, initial, onClose }: { today: LocalDate; initial: Debt
         </div>
         <MoneyField label="Pago mínimo" value={minimum} onChange={setMinimum} />
         <MoneyField
-          label="¿Cuánto vas a pagar cada mes?"
+          label="¿Cuánto vas a pagar cada vez?"
           value={payment}
           onChange={setPayment}
-          hint="Esto es lo que entra en tu proyección. Vacío = el mínimo."
+          hint="Esto es lo que entra en tu proyección. Vacío = el mínimo. 0 = sin pagos programados (no entra en la proyección)."
         />
+        <div className="field">
+          <label htmlFor="debt-freq">¿Cada cuánto pagas?</label>
+          <select id="debt-freq" value={freq} onChange={(e) => setFreq(e.target.value)}>
+            {DEBT_FREQUENCIES.map((f) => (
+              <option key={f.value} value={f.value}>{f.label}</option>
+            ))}
+          </select>
+        </div>
         {preview && (
           <p className={preview.payable ? 'hint' : 'hint warn'}>
             {preview.payable
@@ -253,7 +280,7 @@ function DebtForm({ today, initial, onClose }: { today: LocalDate; initial: Debt
         <div className="field">
           <label htmlFor="debt-next">Próxima fecha de pago</label>
           <input id="debt-next" type="date" value={next} min={today} onChange={(e) => setNext(e.target.value)} />
-          <p className="hint">Se repite cada mes ese mismo día. Te avisamos 3 días antes.</p>
+          <p className="hint">Se repite {frequency.unit === 'week' ? 'ese mismo día de la semana' : 'cada mes ese mismo día'}. Te avisamos 3 días antes.</p>
         </div>
         {kind === 'credit-card' && (
           <div className="field">

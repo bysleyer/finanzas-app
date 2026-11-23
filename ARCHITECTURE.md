@@ -56,6 +56,12 @@ sale de la cuenta, baja el saldo de la deuda y se marca como transferencia (no c
 gasto variable). Para comparar estrategias (avalancha vs. bola de nieve) se usa una
 simulación mensual con el mismo presupuesto total.
 
+**Importar desde "Mi dinero".** `data/importers/mi-dinero.ts` traduce el respaldo de la primera
+app (o su `datos.json` sincronizado) a las entidades de esta. Es una función pura que devuelve
+todo lo que va a importar más una lista de avisos sobre lo que no tiene equivalente exacto; nada
+se guarda hasta que el usuario confirma. Las pruebas usan datos inventados: los datos reales
+nunca entran a este repositorio, que es público.
+
 **Migraciones de la base local.** Nunca se edita una versión del esquema ya publicada: se
 agrega una nueva con su `upgrade`. Hay una prueba que crea una base con el esquema viejo y
 verifica que se actualiza sin perder datos.
@@ -88,6 +94,7 @@ src/
   domain/     money.ts · date.ts · recurrence.ts · types.ts
   engine/     forecast.ts · events.ts · variable-spending.ts · goals.ts · pending.ts · debts.ts
   data/       db.ts (esquema) · repository.ts (operaciones) · defaults.ts · persistence.ts
+    importers/  mi-dinero.ts
   ui/         App.tsx · hooks.ts · format.ts · styles.css
     components/  MoneyField · Sheet · ProjectionChart
     screens/  Setup · Home · AddTransaction · Movements · Fixed · Debts · Settings

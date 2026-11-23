@@ -54,6 +54,7 @@ export function pendingOccurrences(
   }
 
   for (const debt of debts) {
+    if (debt.payment <= 0) continue; // sin pagos programados
     let remaining: number = debt.balance;
     for (const date of occurrencesBetween(debt.rule, from, today)) {
       if (remaining <= 0) break;

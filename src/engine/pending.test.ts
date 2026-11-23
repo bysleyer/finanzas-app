@@ -43,3 +43,9 @@ describe('nextUnresolved', () => {
     expect(nextUnresolved(rule, 'visa', new Set([occurrenceKey('visa', TODAY)]), TODAY)).toBe('2026-12-23');
   });
 });
+
+describe('deudas sin plan', () => {
+  it('no piden confirmación de pagos', () => {
+    expect(pendingOccurrences([], new Set(), TODAY, [debt('amigo', 1000, 0, monthly('2026-11-20'), { minimum: 0 })])).toEqual([]);
+  });
+});

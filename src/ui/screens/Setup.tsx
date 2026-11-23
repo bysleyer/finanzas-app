@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import { completeSetup } from '../../data';
 import { type LocalDate, addDays, localDate, parseMoneyInput, parts } from '../../domain';
+import { ImportMiDinero } from '../components/ImportMiDinero';
 import { MoneyField } from '../components/MoneyField';
 import { db } from '../db';
 
@@ -51,6 +52,9 @@ export function Setup({ today }: { today: LocalDate }) {
         <button type="submit" className="primary">Empezar</button>
       </form>
       <p className="hint center">Tus datos se guardan solo en este dispositivo.</p>
+      <div className="center">
+        <ImportMiDinero today={today} />
+      </div>
     </main>
   );
 }

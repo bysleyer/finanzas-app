@@ -1,5 +1,5 @@
-import { compareStrategies, monthlyInterest, payoffEstimate, simulateStrategy } from './debts';
-import { $, debt, monthly } from './test-fixtures';
+import { compareStrategies, monthlyEquivalent, monthlyInterest, payoffEstimate, simulateStrategy } from './debts';
+import { $, d, debt, monthly, weekly } from './test-fixtures';
 
 const rule = monthly('2026-12-15');
 
@@ -70,5 +70,22 @@ describe('estrategias', () => {
   it('ignora deudas ya liquidadas', () => {
     const c = compareStrategies([visa, debt('pagada', 0, 0, rule)], $(300));
     expect(c.avalanche.order).toEqual(['visa']);
+  });
+});
+
+describe('pagos semanales y deudas sin plan', () => {
+  it('convierte pagos semanales a su equivalente mensual', () => {
+    expect(monthlyEquivalent($(120), { unit: 'week', interval: 1, anchor: d('2026-11-27') })).toBe($(520));
+    expect(monthlyEquivalent($(120), { unit: 'week', interval: 2, anchor: d('2026-11-27') })).toBe($(260));
+  });
+
+  it('un préstamo semanal de $130 con $390 se liquida en 1 mes, no en 3', () => {
+    const r = payoffEstimate(debt('prestamo', 390, 130, weekly('2026-11-27')));
+    expect(r).toEqual({ payable: true, months: 1, totalInterest: 0 });
+  });
+
+  it('una deuda sin pagos programados no genera pagos ni pendientes', () => {
+    const amigo = debt('amigo', 1000, 0, monthly('2026-11-23'), { minimum: 0 });
+    expect(payoffEstimate(amigo).payable).toBe(false);
   });
 });

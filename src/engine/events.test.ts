@@ -35,3 +35,9 @@ describe('goalContributions', () => {
     expect(goalContributions(goal, none, TODAY, d('2027-12-31'))).toHaveLength(2);
   });
 });
+
+describe('deudas sin plan', () => {
+  it('no generan pagos en la proyección', () => {
+    expect(debtPayments(debt('amigo', 1000, 0, monthly('2026-12-01'), { minimum: 0 }), none, TODAY, d('2027-12-31'))).toEqual([]);
+  });
+});
