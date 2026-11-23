@@ -28,9 +28,9 @@ Cada capa solo puede usar las que están debajo. `npm run lint` falla si alguien
 |---|---|---|---|
 | `domain` | ✅ hecha | nada | Sin dependencias externas. Solo tipos y funciones puras. |
 | `engine` | ✅ hecha | `domain` | Funciones puras: misma entrada, misma salida. Nada de guardar, leer ni mostrar. |
-| `data` | pendiente | `domain`, `engine` | Única capa que toca IndexedDB. |
+| `data` | ✅ hecha | `domain`, `engine` | Única capa que toca IndexedDB. Escrituras de varias tablas siempre en una transacción. |
 | `sync` | pendiente | `domain`, `engine`, `data` | Cifra antes de subir. Nunca sube datos legibles. |
-| `ui` | pendiente | todas | No contiene lógica financiera: le pregunta al motor. |
+| `ui` | ✅ primera versión | todas | No contiene lógica financiera: le pregunta al motor. |
 
 ## Decisiones
 
@@ -44,6 +44,11 @@ verano. Tipo `LocalDate`.
 **Recurrencias genéricas.** "Cada N días/semanas/meses/años desde una fecha". Cubre semanal,
 cada 14 días, mensual, anual, etc. sin código especial para cada caso. Los meses cortos se
 manejan solos: un pago el 31 cae el 28 de febrero y vuelve al 31 en marzo.
+
+**Recurrentes previstos.** Cuando llega la fecha de un recurrente (por ejemplo, el sueldo del
+viernes), la app pregunta "¿Ya pasó esto?". Confirmarlo crea la transacción real y mueve el saldo;
+descartarlo lo marca como "no ocurrió". El motor solo proyecta de hoy en adelante, así que lo
+pendiente del pasado no se cuenta hasta que se resuelve.
 
 **Solo se proyecta el dinero gastable.** Efectivo y débito. El ahorro no se toca y las tarjetas
 de crédito se reflejan a través de su pago mensual.
@@ -71,7 +76,16 @@ días. Cuando no hay pagos grandes en el futuro, las dos fórmulas dan lo mismo.
 ```
 src/
   domain/     money.ts · date.ts · recurrence.ts · types.ts
-  engine/     forecast.ts · events.ts · variable-spending.ts · goals.ts
+  engine/     forecast.ts · events.ts · variable-spending.ts · goals.ts · pending.ts
+  data/       db.ts (esquema) · repository.ts (operaciones) · defaults.ts · persistence.ts
+  ui/         App.tsx · hooks.ts · format.ts · styles.css
+    screens/  Setup · Home · AddTransaction · Movements · Fixed · Settings
+  main.tsx    punto de entrada
 ```
+
+## Publicación
+
+Cada push a `main` corre las pruebas y, si pasan, publica en GitHub Pages
+(`.github/workflows/ci.yml`). Si una prueba falla, no se publica nada.
 
 Cada archivo `x.ts` tiene sus pruebas en `x.test.ts`, al lado.

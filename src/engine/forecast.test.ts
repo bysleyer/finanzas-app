@@ -12,6 +12,7 @@ describe('forecast: disponible hoy', () => {
     expect(f.breakdown.nextIncomeDate).toBe('2026-11-27');
     expect(f.breakdown.daysUntilIncome).toBe(4);
     expect(f.breakdown.periodBudget).toBe($(900)); // 1000 − 100 de colchón
+    expect(f.breakdown.futureReserve).toBe(0);
     expect(f.availableToday).toBe($(225)); // 900 ÷ 4
   });
 
@@ -35,6 +36,7 @@ describe('forecast: disponible hoy', () => {
     expect(f.breakdown.lowestBalance).toBe($(400));
     expect(f.breakdown.lowestBalanceDate).toBe('2027-01-14');
     expect(f.availableToday).toBe($(100)); // 400 ÷ 4 días
+    expect(f.breakdown.futureReserve).toBe($(600)); // se apartan 1000 − 400 para el seguro
 
     // La fórmula del PRD daría min(1000/4, 400) = $250 diarios: 4 días así son $1,000 y el 14-ene quedarías en −$600.
     // Aquí, siguiendo el plan, ningún día baja de cero.

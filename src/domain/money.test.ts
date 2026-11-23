@@ -1,4 +1,4 @@
-import { add, cents, divFloor, formatMoney, fromDollars, mulRound, sub } from './money';
+import { add, cents, divFloor, formatMoney, fromDollars, mulRound, parseMoneyInput, sub } from './money';
 
 describe('money', () => {
   it('evita el error clásico de decimales: 0.10 + 0.20 = 0.30 exacto', () => {
@@ -32,5 +32,28 @@ describe('money', () => {
     const text = formatMoney(cents(123_456));
     expect(text).toContain('1,234.56');
     expect(text).toContain('$');
+  });
+});
+
+describe('parseMoneyInput', () => {
+  it.each([
+    ['12', 1200],
+    ['12.5', 1250],
+    ['12,50', 1250],
+    ['$1,234.56', 123_456],
+    [' 7.05 ', 705],
+    ['0.01', 1],
+  ])('"%s" → %i centavos', (text, expected) => {
+    expect(parseMoneyInput(text)).toBe(expected);
+  });
+
+  it.each(['', 'abc', '0', '-5', '1.234', '12.3.4', '1e5'])('rechaza "%s"', (text) => {
+    expect(parseMoneyInput(text)).toBeUndefined();
+  });
+
+  it('acepta cero solo si se pide', () => {
+    expect(parseMoneyInput('0')).toBeUndefined();
+    expect(parseMoneyInput('0', { allowZero: true })).toBe(0);
+    expect(parseMoneyInput('', { allowZero: true })).toBeUndefined();
   });
 });

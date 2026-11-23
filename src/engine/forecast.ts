@@ -71,6 +71,11 @@ export interface ForecastBreakdown {
   /** P_min: saldo más bajo proyectado (sin el gasto de este periodo). */
   lowestBalance: Cents;
   lowestBalanceDate: LocalDate;
+  /**
+   * Dinero que se aparta hoy para un pago futuro grande (por ejemplo, un seguro anual):
+   * lo que quedaría al cobrar menos P_min. Es 0 cuando ningún mes futuro aprieta.
+   */
+  futureReserve: Cents;
   /** P_min − R: lo que se puede gastar en total hasta el próximo ingreso. */
   periodBudget: Cents;
 }
@@ -124,6 +129,9 @@ export function forecast(input: ForecastInput): Forecast {
     date >= periodEnd ? dailyVariableSpending : 0,
   );
   const lowest = baseline.reduce((low, day) => (day.balance < low.balance ? day : low));
+  // Saldo al cerrar el periodo actual (víspera del próximo ingreso), antes del gasto variable.
+  const periodClose = baseline[Math.min(daysUntilIncome, baseline.length) - 1] ?? lowest;
+  const futureReserve = cents(Math.max(0, periodClose.balance - lowest.balance));
 
   const periodBudget = cents(Math.max(0, lowest.balance - settings.safetyCushion));
   // La ración se calcula como si hoy empezara sin gastos, y luego se resta lo ya gastado.
@@ -161,6 +169,7 @@ export function forecast(input: ForecastInput): Forecast {
       nextIncomeDate,
       lowestBalance: lowest.balance,
       lowestBalanceDate: lowest.date,
+      futureReserve,
       periodBudget,
     },
     days: planned,

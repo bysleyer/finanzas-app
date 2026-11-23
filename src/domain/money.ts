@@ -48,6 +48,10 @@ export function divFloor(a: Cents, divisor: number): Cents {
   return cents(Math.floor(a / divisor));
 }
 
+export function abs(a: Cents): Cents {
+  return cents(Math.abs(a));
+}
+
 export function min(a: Cents, b: Cents): Cents {
   return (a < b ? a : b);
 }
@@ -69,4 +73,24 @@ export interface FormatOptions {
 
 export function formatMoney(amount: Cents, { locale = 'es-US', currency = 'USD' }: FormatOptions = {}): string {
   return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount / 100);
+}
+
+/**
+ * Lee un monto escrito por el usuario: "12", "12.5", "12,50", "$1,234.56".
+ * Devuelve `undefined` si no es un monto válido y positivo (o cero, con `allowZero`).
+ */
+export function parseMoneyInput(text: string, { allowZero = false } = {}): Cents | undefined {
+  let clean = text.replace(/[\s$]/g, '');
+  if (clean === '') return undefined;
+  // Si solo hay una coma y está seguida de 1-2 dígitos al final, es separador decimal ("12,50").
+  if (/^\d+,\d{1,2}$/.test(clean)) clean = clean.replace(',', '.');
+  else clean = clean.replace(/,/g, '');
+  if (!/^\d+(\.\d{0,2})?$/.test(clean)) return undefined;
+  const value = fromDollars(Number(clean));
+  return value > 0 || (allowZero && value === 0) ? value : undefined;
+}
+
+/** Monto en dólares para mostrar dentro de un campo editable: 1234 → "12.34". */
+export function toInputString(amount: Cents): string {
+  return (amount / 100).toFixed(2);
 }

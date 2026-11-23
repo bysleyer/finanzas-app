@@ -28,6 +28,8 @@ export interface Category {
   id: Id;
   name: string;
   kind: 'income' | 'expense';
+  /** Emoji que identifica la categoría en pantalla. */
+  icon?: string;
 }
 
 export interface Transaction {
