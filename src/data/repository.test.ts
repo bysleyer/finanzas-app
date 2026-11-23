@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
 import { fromDollars as $, localDate as d, occurrenceKey } from '../domain';
 import { forecast, pendingOccurrences } from '../engine';
 import { FinanzasDb } from './db';
@@ -6,12 +7,16 @@ import { MAIN_ACCOUNT_ID } from './defaults';
 import {
   addTransaction,
   completeSetup,
+  confirmDebtPayment,
   confirmOccurrence,
+  confirmPending,
+  deleteDebt,
   deleteTransaction,
   getSettings,
   isSetupDone,
   loadForecastInput,
   recentTransactions,
+  saveDebt,
   saveRecurring,
   skipOccurrence,
 } from './repository';
@@ -152,5 +157,90 @@ describe('lectura para el motor', () => {
     await addTransaction(db, { kind: 'expense', amount: $(5), categoryId: 'food', date: d('2026-11-20') });
     const input = await loadForecastInput(db, TODAY);
     expect(input.transactions.map((t) => t.date).sort()).toEqual(['2025-01-01', '2026-11-20']);
+  });
+});
+
+describe('deudas', () => {
+  const visa = {
+    name: 'Visa',
+    kind: 'credit-card' as const,
+    balance: $(500),
+    aprBasisPoints: 2499,
+    minimumPayment: $(35),
+    payment: $(200),
+    rule: { unit: 'month' as const, interval: 1, anchor: TODAY },
+  };
+  const debtBalance = async (id: string) => (await db.debts.get(id))?.balance;
+
+  it('no acepta un pago planeado menor que el mínimo', async () => {
+    await expect(saveDebt(db, { ...visa, payment: $(20) })).rejects.toThrow();
+  });
+
+  it('pagar baja la cuenta y la deuda, y no cuenta como gasto variable', async () => {
+    const saved = await saveDebt(db, visa);
+    await confirmDebtPayment(db, saved.id, TODAY);
+    await confirmDebtPayment(db, saved.id, TODAY); // doble toque no duplica
+    expect(await balance()).toBe($(800));
+    expect(await debtBalance(saved.id)).toBe($(300));
+    const f = forecast(await loadForecastInput(db, TODAY));
+    expect(f.spentToday).toBe(0);
+  });
+
+  it('el último pago no pasa del saldo de la deuda', async () => {
+    const saved = await saveDebt(db, { ...visa, balance: $(120) });
+    await confirmDebtPayment(db, saved.id, TODAY);
+    expect(await balance()).toBe($(880));
+    expect(await debtBalance(saved.id)).toBe(0);
+  });
+
+  it('borrar el pago devuelve el dinero a la cuenta y a la deuda, y vuelve a quedar pendiente', async () => {
+    const saved = await saveDebt(db, visa);
+    await confirmDebtPayment(db, saved.id, TODAY, $(150));
+    const [tx] = await db.transactions.toArray();
+    if (!tx) throw new Error('falta la transacción');
+    await deleteTransaction(db, tx.id);
+    expect(await balance()).toBe($(1000));
+    expect(await debtBalance(saved.id)).toBe($(500));
+    const input = await loadForecastInput(db, TODAY);
+    expect(pendingOccurrences(input.recurring, input.confirmed, TODAY, input.debts)).toHaveLength(1);
+  });
+
+  it('confirmPending sirve para recurrentes y para deudas', async () => {
+    const saved = await saveDebt(db, visa);
+    const input = await loadForecastInput(db, TODAY);
+    const [pending] = pendingOccurrences(input.recurring, input.confirmed, TODAY, input.debts);
+    if (!pending) throw new Error('falta el pendiente');
+    await confirmPending(db, pending);
+    expect(await debtBalance(saved.id)).toBe($(300));
+  });
+
+  it('borrar una deuda conserva los pagos ya hechos', async () => {
+    const saved = await saveDebt(db, visa);
+    await confirmDebtPayment(db, saved.id, TODAY);
+    await deleteDebt(db, saved.id);
+    expect(await db.transactions.count()).toBe(1);
+    expect(await balance()).toBe($(800));
+  });
+});
+
+describe('migraciones', () => {
+  it('una base de la versión 1 (la que ya está en el iPhone) se actualiza sin perder datos', async () => {
+    const name = `v1-${n++}`;
+    // Base creada exactamente como la creaba la versión 1 de la app.
+    const v1 = new Dexie(name);
+    v1.version(1).stores({
+      accounts: 'id', categories: 'id, kind', transactions: 'id, date, accountId, categoryId, recurringId',
+      recurring: 'id', debts: 'id', goals: 'id', occurrences: 'key', meta: 'key',
+    });
+    await v1.table('categories').bulkAdd([{ id: 'food', name: 'Comida', kind: 'expense' }]);
+    await v1.table('accounts').add({ id: MAIN_ACCOUNT_ID, name: 'Cuenta', type: 'checking', balance: $(1234), spendable: true });
+    await v1.table('transactions').add({ id: 't1', accountId: MAIN_ACCOUNT_ID, amount: $(-5), date: TODAY, categoryId: 'food' });
+    v1.close();
+
+    const upgraded = new FinanzasDb(name);
+    expect(await upgraded.categories.get('debt-payment')).toBeDefined();
+    expect((await upgraded.accounts.get(MAIN_ACCOUNT_ID))?.balance).toBe($(1234));
+    expect(await upgraded.transactions.count()).toBe(1);
+    await upgraded.delete();
   });
 });

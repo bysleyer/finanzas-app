@@ -42,6 +42,8 @@ export interface Transaction {
   note?: string;
   /** Si se generó al confirmar un recurrente. Esos gastos no cuentan como "gasto variable". */
   recurringId?: Id;
+  /** Si es el pago de una deuda. Se marca también como transferencia. */
+  debtId?: Id;
   /** Pagos de deuda y movimientos entre cuentas propias. Tampoco cuentan como gasto variable. */
   isTransfer?: boolean;
 }
@@ -57,17 +59,24 @@ export interface Recurring {
   categoryId: Id;
 }
 
+export type DebtKind = 'credit-card' | 'loan';
+
 export interface Debt {
   id: Id;
   name: string;
+  kind: DebtKind;
   /** Lo que se debe hoy (positivo). */
   balance: Cents;
   /** Tasa anual en puntos básicos: 24.99% = 2499. Enteros para evitar decimales. */
   aprBasisPoints: number;
-  /** Pago mensual planeado (al menos el mínimo). */
+  /** Pago mínimo que exige el banco. */
+  minimumPayment: Cents;
+  /** Pago mensual planeado (al menos el mínimo). Es el que entra en la proyección. */
   payment: Cents;
-  /** Cuándo se paga. */
+  /** Cuándo se paga (normalmente mensual, el día de vencimiento). */
   rule: RecurrenceRule;
+  /** Tarjetas: día del mes en que corta el estado de cuenta. Solo informativo. */
+  statementDay?: number;
 }
 
 export interface Goal {

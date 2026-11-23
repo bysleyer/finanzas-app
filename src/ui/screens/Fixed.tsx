@@ -10,6 +10,7 @@ import {
   parseMoneyInput,
   toInputString,
 } from '../../domain';
+import { nextUnresolved } from '../../engine';
 import { MoneyField } from '../components/MoneyField';
 import { Sheet } from '../components/Sheet';
 import { db } from '../db';
@@ -34,7 +35,7 @@ export function Fixed({ data, today }: { data: AppData; today: LocalDate }) {
   const list = (items: Recurring[]) => (
     <ul className="list">
       {items.map((r) => {
-        const next = nextOccurrence(r.rule, today);
+        const next = nextUnresolved(r.rule, r.id, data.input.confirmed, today);
         return (
           <li key={r.id}>
             <button type="button" className="row row-button" onClick={() => setEditing(r)}>

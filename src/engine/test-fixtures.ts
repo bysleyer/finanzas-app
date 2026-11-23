@@ -35,6 +35,16 @@ export function expense(id: string, amount: number, rule: RecurrenceRule, accoun
   return { id, name: id, kind: 'expense', amount: $(amount), rule, accountId, categoryId: id };
 }
 
+export function debt(
+  id: string,
+  balance: number,
+  payment: number,
+  rule: RecurrenceRule,
+  { apr = 0, minimum = payment, kind = 'loan' }: { apr?: number; minimum?: number; kind?: Debt['kind'] } = {},
+): Debt {
+  return { id, name: id, kind, balance: $(balance), aprBasisPoints: Math.round(apr * 100), minimumPayment: $(minimum), payment: $(payment), rule };
+}
+
 export function spend(amount: number, date: LocalDate | string, categoryId = 'food', accountId = 'checking'): Transaction {
   return { id: `${date}-${categoryId}-${amount}`, accountId, amount: $(-amount), date: d(date), categoryId };
 }

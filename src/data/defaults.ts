@@ -1,5 +1,7 @@
 import { type Category, type Settings, fromDollars } from '../domain';
 
+export const DEBT_PAYMENT_CATEGORY: Category = { id: 'debt-payment', name: 'Pago de deuda', kind: 'expense', icon: '💳' };
+
 export const DEFAULT_CATEGORIES: readonly Category[] = [
   { id: 'food', name: 'Comida', kind: 'expense', icon: '🍔' },
   { id: 'groceries', name: 'Supermercado', kind: 'expense', icon: '🛒' },
@@ -14,6 +16,7 @@ export const DEFAULT_CATEGORIES: readonly Category[] = [
   { id: 'phone', name: 'Teléfono e internet', kind: 'expense', icon: '📱' },
   { id: 'insurance', name: 'Seguros', kind: 'expense', icon: '🛡️' },
   { id: 'other-expense', name: 'Otros', kind: 'expense', icon: '📦' },
+  DEBT_PAYMENT_CATEGORY,
   { id: 'salary', name: 'Sueldo', kind: 'income', icon: '💼' },
   { id: 'other-income', name: 'Otros ingresos', kind: 'income', icon: '💵' },
 ];

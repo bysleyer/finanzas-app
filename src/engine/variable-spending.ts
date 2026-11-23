@@ -16,6 +16,8 @@ export interface VariableSpendingEstimate {
   byCategory: Map<Id, Cents>;
   /** Días de historial realmente usados para el promedio. */
   daysUsed: number;
+  /** Días de historial que existen (desde el primer movimiento hasta ayer, máx. la ventana). */
+  historyDays: number;
 }
 
 export function isVariableExpense(tx: Transaction): boolean {
@@ -44,10 +46,10 @@ export function estimateVariableSpending(
     byCategory.set(tx.categoryId, cents((byCategory.get(tx.categoryId) ?? 0) + spent));
   }
 
-  if (earliest === undefined) return { dailyTotal: cents(0), byCategory, daysUsed: 0 };
+  if (earliest === undefined) return { dailyTotal: cents(0), byCategory, daysUsed: 0, historyDays: 0 };
 
   // Si el historial es más corto que la ventana, se promedia sobre los días que sí existen.
   const historyDays = Math.min(windowDays, Math.max(diffDays(earliest, today), 0));
   const daysUsed = Math.max(historyDays, MIN_HISTORY_DAYS);
-  return { dailyTotal: divFloor(cents(total), daysUsed), byCategory, daysUsed };
+  return { dailyTotal: divFloor(cents(total), daysUsed), byCategory, daysUsed, historyDays };
 }

@@ -21,5 +21,6 @@ npm run build    # generar la versión para publicar
 
 - [x] Fase 0: dominio y motor de proyección con pruebas
 - [x] Fase 1a: base local, configuración inicial, disponible hoy, registro rápido, fijos, ajustes, PWA
-- [ ] Fase 1b: gráfica a 6 meses, deudas y tarjetas, PIN, respaldo cifrado y exportar
+- [x] Fase 1b: gráfica de saldo a 6–12 meses, deudas y tarjetas, avalancha vs. bola de nieve
+- [ ] Fase 1c: PIN, respaldo cifrado en GitHub y exportar CSV/JSON
 - [ ] Fase 2: metas, presupuestos, reportes, simulador, exportar

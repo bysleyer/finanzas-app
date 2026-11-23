@@ -50,6 +50,16 @@ viernes), la app pregunta "¿Ya pasó esto?". Confirmarlo crea la transacción r
 descartarlo lo marca como "no ocurrió". El motor solo proyecta de hoy en adelante, así que lo
 pendiente del pasado no se cuenta hasta que se resuelve.
 
+**Deudas.** Cada deuda tiene saldo, tasa (APR en puntos básicos), pago mínimo y pago planeado.
+El pago planeado entra en la proyección día a día, con interés diario. Al confirmar un pago,
+sale de la cuenta, baja el saldo de la deuda y se marca como transferencia (no cuenta como
+gasto variable). Para comparar estrategias (avalancha vs. bola de nieve) se usa una
+simulación mensual con el mismo presupuesto total.
+
+**Migraciones de la base local.** Nunca se edita una versión del esquema ya publicada: se
+agrega una nueva con su `upgrade`. Hay una prueba que crea una base con el esquema viejo y
+verifica que se actualiza sin perder datos.
+
 **Solo se proyecta el dinero gastable.** Efectivo y débito. El ahorro no se toca y las tarjetas
 de crédito se reflejan a través de su pago mensual.
 
@@ -76,10 +86,11 @@ días. Cuando no hay pagos grandes en el futuro, las dos fórmulas dan lo mismo.
 ```
 src/
   domain/     money.ts · date.ts · recurrence.ts · types.ts
-  engine/     forecast.ts · events.ts · variable-spending.ts · goals.ts · pending.ts
+  engine/     forecast.ts · events.ts · variable-spending.ts · goals.ts · pending.ts · debts.ts
   data/       db.ts (esquema) · repository.ts (operaciones) · defaults.ts · persistence.ts
   ui/         App.tsx · hooks.ts · format.ts · styles.css
-    screens/  Setup · Home · AddTransaction · Movements · Fixed · Settings
+    components/  MoneyField · Sheet · ProjectionChart
+    screens/  Setup · Home · AddTransaction · Movements · Fixed · Debts · Settings
   main.tsx    punto de entrada
 ```
 

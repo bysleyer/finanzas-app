@@ -10,6 +10,7 @@
 
 import Dexie, { type EntityTable } from 'dexie';
 import type { Account, Category, Debt, Goal, OccurrenceKey, Recurring, Settings, Transaction } from '../domain';
+import { DEBT_PAYMENT_CATEGORY } from './defaults';
 
 export interface OccurrenceRecord {
   key: OccurrenceKey;
@@ -46,6 +47,16 @@ export class FinanzasDb extends Dexie {
       occurrences: 'key',
       meta: 'key',
     });
+
+    // v2: pagos de deuda. Agrega el índice debtId y la categoría "Pago de deuda" a quien ya usaba la app.
+    this.version(2)
+      .stores({ transactions: 'id, date, accountId, categoryId, recurringId, debtId' })
+      .upgrade(async (tx) => {
+        const categories = tx.table<Category, string>('categories');
+        if ((await categories.count()) > 0 && !(await categories.get(DEBT_PAYMENT_CATEGORY.id))) {
+          await categories.add(DEBT_PAYMENT_CATEGORY);
+        }
+      });
   }
 }
 

@@ -1,4 +1,4 @@
-import { add, cents, divFloor, formatMoney, fromDollars, mulRound, parseMoneyInput, sub } from './money';
+import { add, cents, divFloor, formatMoney, formatRate, fromDollars, mulRound, parseMoneyInput, parseRateInput, sub } from './money';
 
 describe('money', () => {
   it('evita el error clásico de decimales: 0.10 + 0.20 = 0.30 exacto', () => {
@@ -55,5 +55,27 @@ describe('parseMoneyInput', () => {
     expect(parseMoneyInput('0')).toBeUndefined();
     expect(parseMoneyInput('0', { allowZero: true })).toBe(0);
     expect(parseMoneyInput('', { allowZero: true })).toBeUndefined();
+  });
+});
+
+describe('tasas', () => {
+  it.each([
+    ['24.99', 2499],
+    ['24,99 %', 2499],
+    ['8', 800],
+    ['0', 0],
+    ['100', 10_000],
+  ])('"%s" → %i puntos básicos', (text, bps) => {
+    expect(parseRateInput(text)).toBe(bps);
+  });
+
+  it.each(['', 'abc', '101', '-3', '24.999'])('rechaza "%s"', (text) => {
+    expect(parseRateInput(text)).toBeUndefined();
+  });
+
+  it('formatea sin ceros sobrantes', () => {
+    expect(formatRate(2499)).toBe('24.99');
+    expect(formatRate(800)).toBe('8');
+    expect(formatRate(1250)).toBe('12.50');
   });
 });

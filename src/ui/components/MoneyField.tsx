@@ -4,7 +4,7 @@ interface Props {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  hint?: string;
+  hint?: string | undefined;
   autoFocus?: boolean;
   large?: boolean;
 }

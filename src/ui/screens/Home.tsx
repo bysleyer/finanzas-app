@@ -1,5 +1,7 @@
-import { confirmOccurrence, isInstalledApp, skipOccurrence } from '../../data';
-import { type LocalDate, abs, diffDays } from '../../domain';
+import { confirmPending, isInstalledApp, skipOccurrence } from '../../data';
+import { type LocalDate, abs, diffDays, parseMoneyInput, toInputString } from '../../domain';
+import type { PendingOccurrence } from '../../engine';
+import { ProjectionChart } from '../components/ProjectionChart';
 import { db } from '../db';
 import { longDate, money, moneyRounded, relativeDate, shortDate } from '../format';
 import type { AppData } from '../hooks';
@@ -40,6 +42,8 @@ export function Home({ data, today }: { data: AppData; today: LocalDate }) {
         </Alert>
       ) : null}
 
+      <ProjectionChart forecast={f} today={today} />
+
       {pending.length > 0 && (
         <section className="card">
           <h2>¿Ya pasó esto?</h2>
@@ -47,19 +51,22 @@ export function Home({ data, today }: { data: AppData; today: LocalDate }) {
             {pending.map((p) => (
               <li key={p.key} className="row">
                 <div className="row-main">
-                  <span className="row-title">{p.recurring.name}</span>
+                  <span className="row-title">{p.name}</span>
                   <span className="row-sub">{relativeDate(p.date, today)}</span>
                 </div>
-                <span className={p.recurring.kind === 'income' ? 'amount income' : 'amount'}>
-                  {p.recurring.kind === 'income' ? '+' : '−'}
-                  {money(p.recurring.amount)}
+                <span className={p.kind === 'income' ? 'amount income' : 'amount'}>
+                  {p.kind === 'income' ? '+' : '−'}
+                  {money(p.amount)}
                 </span>
                 <div className="row-actions">
-                  <button type="button" className="small primary" onClick={() => confirmOccurrence(db, p.recurring.id, p.date)}>
-                    Sí
-                  </button>
-                  <button type="button" className="small" onClick={() => skipOccurrence(db, p.recurring.id, p.date)}>
+                  <button type="button" className="small" onClick={() => skipOccurrence(db, p.sourceId, p.date)}>
                     No
+                  </button>
+                  <button type="button" className="small" onClick={() => confirmOtherAmount(p)}>
+                    Otro monto
+                  </button>
+                  <button type="button" className="small primary" onClick={() => confirmPending(db, p)}>
+                    Sí
                   </button>
                 </div>
               </li>
@@ -132,6 +139,17 @@ export function Home({ data, today }: { data: AppData; today: LocalDate }) {
       )}
     </main>
   );
+}
+
+async function confirmOtherAmount(p: PendingOccurrence) {
+  const text = prompt(`¿Cuánto fue ${p.name}?`, toInputString(p.amount));
+  if (text === null) return;
+  const amount = parseMoneyInput(text);
+  if (amount === undefined) {
+    alert('Ese monto no es válido.');
+    return;
+  }
+  await confirmPending(db, p, amount);
 }
 
 function Alert({ tone, children }: { tone: 'danger' | 'warning'; children: React.ReactNode }) {

@@ -38,7 +38,7 @@ import {
   divFloor,
 } from '../domain';
 import { type EventInputs, type ProjectedEvent, buildEvents } from './events';
-import { estimateVariableSpending, isVariableExpense } from './variable-spending';
+import { MIN_HISTORY_DAYS, estimateVariableSpending, isVariableExpense } from './variable-spending';
 
 export const MAX_HORIZON_MONTHS = 12;
 export const UPCOMING_PAYMENT_DAYS = 3;
@@ -91,6 +91,11 @@ export interface Forecast {
   overspentToday: Cents;
   /** Gasto variable diario usado para proyectar los periodos futuros. */
   dailyVariableSpending: Cents;
+  /**
+   * De dónde sale ese gasto diario: fijado a mano, estimado con el historial, o "insufficient"
+   * si aún hay menos de 2 semanas de historial (los meses futuros se verán más holgados de lo real).
+   */
+  variableSpendingSource: 'manual' | 'history' | 'insufficient';
   breakdown: ForecastBreakdown;
   /** Saldo día a día si se sigue el plan (ración diaria y luego gasto habitual). */
   days: DayBalance[];
@@ -113,8 +118,10 @@ export function forecast(input: ForecastInput): Forecast {
   const periodEnd = nextIncomeDate ?? addDays(horizonEnd, 1); // exclusivo
   const daysUntilIncome = diffDays(today, periodEnd);
 
-  const dailyVariableSpending =
-    settings.manualDailyVariableSpending ?? estimateVariableSpending(input.transactions, today).dailyTotal;
+  const estimate = estimateVariableSpending(input.transactions, today);
+  const dailyVariableSpending = settings.manualDailyVariableSpending ?? estimate.dailyTotal;
+  const variableSpendingSource =
+    settings.manualDailyVariableSpending !== undefined ? 'manual' : estimate.historyDays >= MIN_HISTORY_DAYS ? 'history' : 'insufficient';
 
   const spendableAccounts = new Set(input.accounts.filter((a) => a.spendable).map((a) => a.id));
   const spentToday = cents(
@@ -160,6 +167,7 @@ export function forecast(input: ForecastInput): Forecast {
     spentToday,
     overspentToday: cents(Math.max(0, -remainingToday)),
     dailyVariableSpending,
+    variableSpendingSource,
     breakdown: {
       spendableBalance,
       commitments: cents(commitments),
@@ -218,4 +226,31 @@ function simulate(
     days.push({ date, balance: cents(balance), events: dayEvents });
   }
   return days;
+}
+
+export interface MonthSummary {
+  /** 'YYYY-MM' */
+  month: string;
+  endBalance: Cents;
+  lowestBalance: Cents;
+  lowestDate: LocalDate;
+}
+
+/** Resume la proyección por mes calendario: saldo al cierre y el día más bajo de cada mes. */
+export function monthlySummary(days: readonly DayBalance[]): MonthSummary[] {
+  const result: MonthSummary[] = [];
+  for (const day of days) {
+    const month = day.date.slice(0, 7);
+    const last = result.at(-1);
+    if (last?.month !== month) {
+      result.push({ month, endBalance: day.balance, lowestBalance: day.balance, lowestDate: day.date });
+      continue;
+    }
+    last.endBalance = day.balance;
+    if (day.balance < last.lowestBalance) {
+      last.lowestBalance = day.balance;
+      last.lowestDate = day.date;
+    }
+  }
+  return result;
 }

@@ -1,6 +1,6 @@
-import { addMonths, occurrenceKey } from '../domain';
-import { forecast, whatIf } from './forecast';
-import { $, TODAY, checking, d, expense, income, monthly, scenario, spend, weekly, yearly } from './test-fixtures';
+import { addDays, addMonths, occurrenceKey } from '../domain';
+import { forecast, monthlySummary, whatIf } from './forecast';
+import { $, TODAY, checking, d, debt, expense, income, monthly, scenario, spend, weekly, yearly } from './test-fixtures';
 
 // Hoy es lunes 23-nov-2026. El sueldo semanal cae los viernes: próximo ingreso 27-nov.
 // Días hasta el ingreso (d) = lun, mar, mié, jue = 4.
@@ -132,7 +132,7 @@ describe('forecast: deudas y metas', () => {
     const f = forecast(
       scenario({
         recurring: [paycheck(500)],
-        debts: [{ id: 'visa', name: 'Visa', balance: $(1000), aprBasisPoints: 0, payment: $(200), rule: monthly('2026-11-26') }],
+        debts: [debt('visa', 1000, 200, monthly('2026-11-26'))],
       }),
     );
     expect(f.breakdown.commitments).toBe($(200));
@@ -199,5 +199,25 @@ describe('forecast: horizonte y simulador', () => {
     const start = performance.now();
     forecast(input);
     expect(performance.now() - start).toBeLessThan(200);
+  });
+});
+
+describe('monthlySummary', () => {
+  it('agrupa por mes con el saldo al cierre y el día más bajo', () => {
+    const f = forecast(scenario({ recurring: [paycheck(500), expense('renta', 1200, monthly('2026-12-01'))], settings: { safetyCushion: $(0), horizonMonths: 2, manualDailyVariableSpending: $(0) } }));
+    const months = monthlySummary(f.days);
+    expect(months.map((m) => m.month)).toEqual(['2026-11', '2026-12', '2027-01']);
+    expect(months[1]?.lowestDate).toBe('2026-12-01');
+    expect(months[0]?.endBalance).toBe(f.days.find((x) => x.date === '2026-11-30')?.balance);
+  });
+});
+
+describe('confiabilidad del gasto variable', () => {
+  it('avisa cuando hay poco historial, y no cuando hay suficiente o se fijó a mano', () => {
+    const noManual = { safetyCushion: $(0), horizonMonths: 6 };
+    expect(forecast(scenario({ settings: noManual })).variableSpendingSource).toBe('insufficient');
+    const history = Array.from({ length: 20 }, (_, i) => spend(10, addDays(TODAY, -(i + 1))));
+    expect(forecast(scenario({ settings: noManual, transactions: history })).variableSpendingSource).toBe('history');
+    expect(forecast(scenario()).variableSpendingSource).toBe('manual');
   });
 });

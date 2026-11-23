@@ -6,6 +6,7 @@
 
 import {
   type Cents,
+  type Debt,
   type Id,
   type LocalDate,
   type OccurrenceKey,
@@ -17,9 +18,9 @@ import {
   cents,
   occurrenceKey,
 } from '../domain';
-import type { ForecastInput } from '../engine';
+import type { ForecastInput, PendingOccurrence } from '../engine';
 import { type FinanzasDb, newId } from './db';
-import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS, MAIN_ACCOUNT_ID } from './defaults';
+import { DEBT_PAYMENT_CATEGORY, DEFAULT_CATEGORIES, DEFAULT_SETTINGS, MAIN_ACCOUNT_ID } from './defaults';
 
 // ── Configuración inicial ───────────────────────────────────────────────────────────
 
@@ -104,14 +105,22 @@ export async function addTransaction(db: FinanzasDb, input: NewTransaction): Pro
   return tx;
 }
 
-/** Borra una transacción y devuelve su monto al saldo. Si venía de un recurrente, vuelve a quedar pendiente. */
+/**
+ * Borra una transacción y devuelve su monto al saldo. Si venía de un recurrente o de un pago
+ * de deuda, vuelve a quedar pendiente (y la deuda recupera lo que se había abonado).
+ */
 export async function deleteTransaction(db: FinanzasDb, id: Id): Promise<void> {
-  await db.transaction('rw', [db.transactions, db.accounts, db.occurrences], async () => {
+  await db.transaction('rw', [db.transactions, db.accounts, db.occurrences, db.debts], async () => {
     const tx = await db.transactions.get(id);
     if (!tx) return;
     await db.transactions.delete(id);
     await adjustBalance(db, tx.accountId, -tx.amount);
     if (tx.recurringId) await db.occurrences.delete(occurrenceKey(tx.recurringId, tx.date));
+    if (tx.debtId) {
+      await db.occurrences.delete(occurrenceKey(tx.debtId, tx.date));
+      const debt = await db.debts.get(tx.debtId);
+      if (debt) await db.debts.update(debt.id, { balance: cents(debt.balance - tx.amount) });
+    }
   });
 }
 
@@ -154,9 +163,57 @@ export async function confirmOccurrence(db: FinanzasDb, recurringId: Id, date: L
   });
 }
 
-/** Marca un recurrente previsto como "esta vez no ocurrió". */
-export async function skipOccurrence(db: FinanzasDb, recurringId: Id, date: LocalDate): Promise<void> {
-  await db.occurrences.put({ key: occurrenceKey(recurringId, date), status: 'skipped' });
+/** Marca un movimiento previsto (recurrente o pago de deuda) como "esta vez no ocurrió". */
+export async function skipOccurrence(db: FinanzasDb, sourceId: Id, date: LocalDate): Promise<void> {
+  await db.occurrences.put({ key: occurrenceKey(sourceId, date), status: 'skipped' });
+}
+
+// ── Deudas ──────────────────────────────────────────────────────────────────────────
+
+export async function saveDebt(db: FinanzasDb, debt: Omit<Debt, 'id'> & { id?: Id }): Promise<Debt> {
+  if (debt.payment < debt.minimumPayment) throw new RangeError('El pago planeado no puede ser menor que el mínimo.');
+  const saved: Debt = { ...debt, id: debt.id ?? newId() };
+  await db.debts.put(saved);
+  return saved;
+}
+
+export async function deleteDebt(db: FinanzasDb, id: Id): Promise<void> {
+  await db.debts.delete(id);
+}
+
+/**
+ * Registra el pago de una deuda: sale de la cuenta, baja el saldo de la deuda y el
+ * vencimiento deja de estar pendiente. Por defecto se paga lo planeado (sin pasar del saldo).
+ */
+export async function confirmDebtPayment(db: FinanzasDb, debtId: Id, date: LocalDate, amount?: Cents): Promise<void> {
+  await db.transaction('rw', [db.debts, db.transactions, db.accounts, db.occurrences], async () => {
+    const debt = await db.debts.get(debtId);
+    if (!debt) throw new Error(`No existe la deuda ${debtId}`);
+    const key = occurrenceKey(debtId, date);
+    if (await db.occurrences.get(key)) return; // ya resuelta
+    const value = amount ?? Math.min(debt.payment, debt.balance);
+    if (value <= 0) throw new RangeError('El pago debe ser mayor que cero.');
+    const tx: Transaction = {
+      id: newId(),
+      accountId: MAIN_ACCOUNT_ID,
+      amount: cents(-value),
+      date,
+      categoryId: DEBT_PAYMENT_CATEGORY.id,
+      note: `Pago ${debt.name}`,
+      debtId,
+      isTransfer: true,
+    };
+    await db.transactions.add(tx);
+    await adjustBalance(db, tx.accountId, tx.amount);
+    await db.debts.update(debtId, { balance: cents(Math.max(0, debt.balance - value)) });
+    await db.occurrences.put({ key, status: 'confirmed', transactionId: tx.id });
+  });
+}
+
+/** Confirma cualquier movimiento previsto, venga de un recurrente o de una deuda. */
+export async function confirmPending(db: FinanzasDb, pending: PendingOccurrence, amount?: Cents): Promise<void> {
+  if (pending.source === 'debt') await confirmDebtPayment(db, pending.sourceId, pending.date, amount);
+  else await confirmOccurrence(db, pending.sourceId, pending.date, amount);
 }
 
 // ── Lectura para el motor ───────────────────────────────────────────────────────────

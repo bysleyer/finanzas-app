@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAppData, useToday } from './hooks';
 import { AddTransaction } from './screens/AddTransaction';
+import { Debts } from './screens/Debts';
 import { Fixed } from './screens/Fixed';
 import { Home } from './screens/Home';
 import { Movements } from './screens/Movements';
@@ -11,6 +12,7 @@ const TABS = [
   { id: 'home', label: 'Inicio', icon: '◉' },
   { id: 'movements', label: 'Movimientos', icon: '≡' },
   { id: 'fixed', label: 'Fijos', icon: '↻' },
+  { id: 'debts', label: 'Deudas', icon: '▭' },
   { id: 'settings', label: 'Ajustes', icon: '⚙' },
 ] as const;
 
@@ -41,6 +43,7 @@ export function App() {
       {tab === 'home' && <Home data={state} today={today} />}
       {tab === 'movements' && <Movements data={state} today={today} />}
       {tab === 'fixed' && <Fixed data={state} today={today} />}
+      {tab === 'debts' && <Debts data={state} today={today} />}
       {tab === 'settings' && <Settings data={state} />}
 
       <button type="button" className="fab" aria-label="Registrar gasto" onClick={() => setAdding(true)}>

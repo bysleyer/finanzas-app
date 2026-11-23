@@ -52,7 +52,7 @@ export function useAppData(today: LocalDate): AppState {
       status: 'ready',
       input: raw.input,
       forecast: forecast(raw.input),
-      pending: pendingOccurrences(raw.input.recurring, raw.input.confirmed, today),
+      pending: pendingOccurrences(raw.input.recurring, raw.input.confirmed, today, raw.input.debts),
       recent: raw.recent,
       categories: new Map(raw.categories.map((c) => [c.id, c])),
     };

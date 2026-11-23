@@ -94,3 +94,19 @@ export function parseMoneyInput(text: string, { allowZero = false } = {}): Cents
 export function toInputString(amount: Cents): string {
   return (amount / 100).toFixed(2);
 }
+
+/**
+ * Lee una tasa anual escrita como porcentaje ("24.99", "24,99 %", "8") y la devuelve en
+ * puntos básicos (24.99% → 2499). Acepta de 0 a 100.
+ */
+export function parseRateInput(text: string): number | undefined {
+  const clean = text.replace(/[\s%]/g, '').replace(',', '.');
+  if (!/^\d+(\.\d{0,2})?$/.test(clean)) return undefined;
+  const bps = Math.round(Number(clean) * 100);
+  return bps <= 10_000 ? bps : undefined;
+}
+
+/** 2499 → "24.99" */
+export function formatRate(basisPoints: number): string {
+  return (basisPoints / 100).toFixed(2).replace(/\.00$/, '');
+}
